@@ -1,0 +1,404 @@
+<!doctype html>
+<html lang="zh-CN">
+<meta charset="utf-8">
+<meta name="robots" content="noindex">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>2026 年会音乐厅座位表</title>
+<style>
+  *{box-sizing:border-box}
+  :root{font:16px/1.55 system-ui,-apple-system,sans-serif;color:#1b2832;background:#f1f4f6}
+  body{margin:0}
+  header{background:#f9fbfc;border-bottom:1px solid #d4dfe6;padding:14px 24px}
+  h1{font-size:1.55rem;margin:0 0 5px}
+  h2{font-size:1.12rem;margin:0 0 10px}
+  p{margin:0 0 10px}
+  button,input{font:inherit}
+  button{cursor:pointer;border:1px solid #9bafbc;background:#fff;color:#203342;border-radius:5px;padding:6px 10px}
+  button:disabled{opacity:.55;cursor:default}
+  button:focus-visible,input:focus-visible{outline:3px solid #005ca3;outline-offset:2px}
+  .primary{color:white;background:#17374b;border-color:#17374b}
+  .toolbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:10px}
+  .toolbar input{width:min(250px,100%);border:1px solid #9bafbc;border-radius:5px;padding:6px 10px}
+  .toolbar a{color:#17374b;text-underline-offset:3px}
+  #status,#message{font-size:.9rem;color:#3c5363}
+  #status[data-error="true"]{color:#9d2b21}
+  #message{min-height:1.5em;margin-top:6px}
+  main{display:grid;grid-template-columns:minmax(0,1fr) minmax(305px,395px);gap:14px;padding:14px}
+  .chart,.detail{background:white;border:1px solid #d4dfe6;border-radius:8px;padding:12px}
+  .chart{overflow:auto}
+  .detail{align-self:start;position:sticky;top:12px;max-height:calc(100vh - 24px);overflow:auto}
+  .detail-heading{display:flex;gap:8px;justify-content:space-between;align-items:baseline}
+  .detail-heading button{font-size:.83rem;flex:none;padding:4px 7px}
+  .seat-location{font-size:.91rem;color:#435a6b}
+  .person-section{margin:14px 0 0;padding-top:10px;border-top:1px solid #d4dfe6;font-size:.93rem}
+  .person-section h3,.person-section summary{font-size:.98rem;margin:0 0 6px;font-weight:700}
+  .person-section summary{cursor:pointer}
+  .person-section h4{font-size:.95rem;margin:0 0 5px}
+  .detail-list{margin:5px 0 0;padding-left:1.25em;overflow-wrap:anywhere}
+  .detail-list li{margin:0 0 6px}
+  .detail-list small{display:block;color:#435a6b;font-size:.85rem}
+  .paper-record+.paper-record{margin-top:10px;padding-top:8px;border-top:1px dotted #a8bac6}
+  #seatActions:empty{display:none}
+  #map{display:grid;grid-template-columns:54px repeat(33,minmax(62px,1fr));grid-auto-rows:minmax(31px,auto);gap:2px;min-width:2170px}
+  .stage,.aisle,.zones,.row-label{display:grid;place-items:center;text-align:center}
+  .stage{grid-column:2/-1;background:#e0e9ee;border-radius:5px;font-weight:700;min-height:46px}
+  .aisle{grid-column:2/-1;background:#f1f5f7;color:#435a6b;min-height:27px}
+  .row-label,.zones{color:#435a6b;font-size:.8rem;font-weight:650}
+  .row-label.mix{color:#87392b;background:#f9e2db}
+  .seat{min-width:0;border-radius:3px;padding:2px 1px;font-size:.88rem;line-height:1.2;overflow-wrap:anywhere}
+  .yellow{background:#ffeba3;border-color:#b09858}
+  .blue{background:#d9e7f2;border-color:#91abc2}
+  .white{background:#f7f9fa;border-color:#dbe2e6}
+  .teacher{background:#ffd778;font-weight:700}
+  .volunteer{background:#fff4c8}
+  .fixed{border-bottom:3px solid #526c7c}
+  .seat[aria-pressed="true"]{background:#ceecff;outline:2px solid #005ca3;z-index:1}
+  .seat.target{outline:1px dashed #3a5264}
+  .seat.dim{opacity:.3}
+  .tag{font-size:.74rem;color:#5c4d2f;margin-left:2px}
+  dl{margin:0}
+  dt{font-weight:700;margin-top:12px}
+  dd{margin:2px 0 0;overflow-wrap:anywhere}
+  .note{color:#7d3428;background:#f9eee7;padding:8px;border-radius:4px}
+  .legend{font-size:.85rem;color:#435a6b;margin:0 0 8px}
+  @media(max-width:800px){
+    header{padding:12px}
+    main{display:flex;flex-direction:column;padding:8px}
+    .detail{position:static;order:-1;max-height:44vh;width:100%}
+    #map{grid-template-columns:46px repeat(33,62px)}
+  }
+</style>
+<header>
+  <h1>2026 年会音乐厅座位表</h1>
+  <p>参会者座位表 · 可搜索姓名并查看所在排和座号。</p><p id="summary">最终签到名单</p>
+  <div class="toolbar">
+    <input id="search" type="search" placeholder="搜索姓名或机构" aria-label="搜索姓名或机构">
+    <button id="find">定位</button>
+    <button id="retry" hidden>重试保存</button>
+    <button id="reload" hidden>载入云端版本</button>
+    <span id="status" role="status">正在读取座位…</span>
+  </div>
+  <div id="message" role="status"></div>
+</header>
+<main>
+  <section class="chart" aria-label="音乐厅座位图">
+    <p class="legend" id="legend">悬浮或点击座位查看姓名和座号。</p>
+    <div id="map"></div>
+  </section>
+  <aside class="detail" id="details" aria-label="座位详情">
+    <h2>座位详情</h2><p id="seatHelp">点击姓名查看所在排和座号。</p>
+  </aside>
+</main>
+<script id="seatOfflineData" type="application/json">{"layout":[{"address":"E8","row":8,"column":5,"number":6,"region":"左区","color":"white","reserved":false},{"address":"F8","row":8,"column":6,"number":5,"region":"左区","color":"white","reserved":false},{"address":"G8","row":8,"column":7,"number":4,"region":"左区","color":"white","reserved":false},{"address":"H8","row":8,"column":8,"number":3,"region":"左区","color":"white","reserved":false},{"address":"I8","row":8,"column":9,"number":2,"region":"左区","color":"white","reserved":false},{"address":"J8","row":8,"column":10,"number":1,"region":"左区","color":"white","reserved":false},{"address":"L8","row":8,"column":12,"number":12,"region":"中区","color":"white","reserved":false},{"address":"M8","row":8,"column":13,"number":10,"region":"中区","color":"white","reserved":false},{"address":"N8","row":8,"column":14,"number":8,"region":"中区","color":"white","reserved":false},{"address":"O8","row":8,"column":15,"number":6,"region":"中区","color":"white","reserved":false},{"address":"P8","row":8,"column":16,"number":4,"region":"中区","color":"white","reserved":false},{"address":"Q8","row":8,"column":17,"number":2,"region":"中区","color":"white","reserved":false},{"address":"R8","row":8,"column":18,"number":1,"region":"中区","color":"white","reserved":false},{"address":"S8","row":8,"column":19,"number":3,"region":"中区","color":"white","reserved":false},{"address":"T8","row":8,"column":20,"number":5,"region":"中区","color":"white","reserved":false},{"address":"U8","row":8,"column":21,"number":7,"region":"中区","color":"white","reserved":false},{"address":"V8","row":8,"column":22,"number":9,"region":"中区","color":"white","reserved":false},{"address":"W8","row":8,"column":23,"number":11,"region":"中区","color":"white","reserved":false},{"address":"X8","row":8,"column":24,"number":13,"region":"中区","color":"white","reserved":false},{"address":"Z8","row":8,"column":26,"number":1,"region":"右区","color":"white","reserved":false},{"address":"AA8","row":8,"column":27,"number":2,"region":"右区","color":"white","reserved":false},{"address":"AB8","row":8,"column":28,"number":3,"region":"右区","color":"white","reserved":false},{"address":"AC8","row":8,"column":29,"number":4,"region":"右区","color":"white","reserved":false},{"address":"AD8","row":8,"column":30,"number":5,"region":"右区","color":"white","reserved":false},{"address":"AE8","row":8,"column":31,"number":6,"region":"右区","color":"white","reserved":false},{"address":"D9","row":9,"column":4,"number":7,"region":"左区","color":"white","reserved":false},{"address":"E9","row":9,"column":5,"number":6,"region":"左区","color":"white","reserved":false},{"address":"F9","row":9,"column":6,"number":5,"region":"左区","color":"white","reserved":false},{"address":"G9","row":9,"column":7,"number":4,"region":"左区","color":"white","reserved":false},{"address":"H9","row":9,"column":8,"number":3,"region":"左区","color":"white","reserved":false},{"address":"I9","row":9,"column":9,"number":2,"region":"左区","color":"white","reserved":false},{"address":"J9","row":9,"column":10,"number":1,"region":"左区","color":"white","reserved":false},{"address":"L9","row":9,"column":12,"number":12,"region":"中区","color":"white","reserved":false},{"address":"M9","row":9,"column":13,"number":10,"region":"中区","color":"white","reserved":false},{"address":"N9","row":9,"column":14,"number":8,"region":"中区","color":"white","reserved":false},{"address":"O9","row":9,"column":15,"number":6,"region":"中区","color":"white","reserved":false},{"address":"P9","row":9,"column":16,"number":4,"region":"中区","color":"white","reserved":false},{"address":"Q9","row":9,"column":17,"number":2,"region":"中区","color":"white","reserved":false},{"address":"R9","row":9,"column":18,"number":1,"region":"中区","color":"white","reserved":false},{"address":"S9","row":9,"column":19,"number":3,"region":"中区","color":"white","reserved":false},{"address":"T9","row":9,"column":20,"number":5,"region":"中区","color":"white","reserved":false},{"address":"U9","row":9,"column":21,"number":7,"region":"中区","color":"white","reserved":false},{"address":"V9","row":9,"column":22,"number":9,"region":"中区","color":"white","reserved":false},{"address":"W9","row":9,"column":23,"number":11,"region":"中区","color":"white","reserved":false},{"address":"X9","row":9,"column":24,"number":13,"region":"中区","color":"white","reserved":false},{"address":"Z9","row":9,"column":26,"number":1,"region":"右区","color":"white","reserved":false},{"address":"AA9","row":9,"column":27,"number":2,"region":"右区","color":"white","reserved":false},{"address":"AB9","row":9,"column":28,"number":3,"region":"右区","color":"white","reserved":false},{"address":"AC9","row":9,"column":29,"number":4,"region":"右区","color":"white","reserved":false},{"address":"AD9","row":9,"column":30,"number":5,"region":"右区","color":"white","reserved":false},{"address":"AE9","row":9,"column":31,"number":6,"region":"右区","color":"white","reserved":false},{"address":"AF9","row":9,"column":32,"number":7,"region":"右区","color":"white","reserved":false},{"address":"C10","row":10,"column":3,"number":8,"region":"左区","color":"white","reserved":false},{"address":"D10","row":10,"column":4,"number":7,"region":"左区","color":"white","reserved":false},{"address":"E10","row":10,"column":5,"number":6,"region":"左区","color":"white","reserved":false},{"address":"F10","row":10,"column":6,"number":5,"region":"左区","color":"blue","reserved":false},{"address":"G10","row":10,"column":7,"number":4,"region":"左区","color":"blue","reserved":false},{"address":"H10","row":10,"column":8,"number":3,"region":"左区","color":"blue","reserved":false},{"address":"I10","row":10,"column":9,"number":2,"region":"左区","color":"blue","reserved":false},{"address":"J10","row":10,"column":10,"number":1,"region":"左区","color":"blue","reserved":false},{"address":"L10","row":10,"column":12,"number":12,"region":"中区","color":"white","reserved":false},{"address":"M10","row":10,"column":13,"number":10,"region":"中区","color":"white","reserved":false},{"address":"N10","row":10,"column":14,"number":8,"region":"中区","color":"white","reserved":false},{"address":"O10","row":10,"column":15,"number":6,"region":"中区","color":"white","reserved":false},{"address":"P10","row":10,"column":16,"number":4,"region":"中区","color":"white","reserved":false},{"address":"Q10","row":10,"column":17,"number":2,"region":"中区","color":"white","reserved":false},{"address":"R10","row":10,"column":18,"number":1,"region":"中区","color":"white","reserved":false},{"address":"S10","row":10,"column":19,"number":3,"region":"中区","color":"white","reserved":false},{"address":"T10","row":10,"column":20,"number":5,"region":"中区","color":"white","reserved":false},{"address":"U10","row":10,"column":21,"number":7,"region":"中区","color":"white","reserved":false},{"address":"V10","row":10,"column":22,"number":9,"region":"中区","color":"white","reserved":false},{"address":"W10","row":10,"column":23,"number":11,"region":"中区","color":"white","reserved":false},{"address":"X10","row":10,"column":24,"number":13,"region":"中区","color":"white","reserved":false},{"address":"Z10","row":10,"column":26,"number":1,"region":"右区","color":"blue","reserved":false},{"address":"AA10","row":10,"column":27,"number":2,"region":"右区","color":"blue","reserved":false},{"address":"AB10","row":10,"column":28,"number":3,"region":"右区","color":"blue","reserved":false},{"address":"AC10","row":10,"column":29,"number":4,"region":"右区","color":"blue","reserved":false},{"address":"AD10","row":10,"column":30,"number":5,"region":"右区","color":"blue","reserved":false},{"address":"AE10","row":10,"column":31,"number":6,"region":"右区","color":"white","reserved":false},{"address":"AF10","row":10,"column":32,"number":7,"region":"右区","color":"white","reserved":false},{"address":"AG10","row":10,"column":33,"number":8,"region":"右区","color":"white","reserved":false},{"address":"B11","row":11,"column":2,"number":9,"region":"左区","color":"white","reserved":false},{"address":"C11","row":11,"column":3,"number":8,"region":"左区","color":"white","reserved":false},{"address":"D11","row":11,"column":4,"number":7,"region":"左区","color":"white","reserved":false},{"address":"E11","row":11,"column":5,"number":6,"region":"左区","color":"white","reserved":false},{"address":"F11","row":11,"column":6,"number":5,"region":"左区","color":"blue","reserved":false},{"address":"G11","row":11,"column":7,"number":4,"region":"左区","color":"blue","reserved":false},{"address":"H11","row":11,"column":8,"number":3,"region":"左区","color":"blue","reserved":false},{"address":"I11","row":11,"column":9,"number":2,"region":"左区","color":"blue","reserved":false},{"address":"J11","row":11,"column":10,"number":1,"region":"左区","color":"blue","reserved":false},{"address":"L11","row":11,"column":12,"number":12,"region":"中区","color":"white","reserved":false},{"address":"M11","row":11,"column":13,"number":10,"region":"中区","color":"white","reserved":false},{"address":"N11","row":11,"column":14,"number":8,"region":"中区","color":"white","reserved":false},{"address":"O11","row":11,"column":15,"number":6,"region":"中区","color":"white","reserved":false},{"address":"P11","row":11,"column":16,"number":4,"region":"中区","color":"white","reserved":false},{"address":"Q11","row":11,"column":17,"number":2,"region":"中区","color":"white","reserved":false},{"address":"R11","row":11,"column":18,"number":1,"region":"中区","color":"white","reserved":false},{"address":"S11","row":11,"column":19,"number":3,"region":"中区","color":"white","reserved":false},{"address":"T11","row":11,"column":20,"number":5,"region":"中区","color":"white","reserved":false},{"address":"U11","row":11,"column":21,"number":7,"region":"中区","color":"white","reserved":false},{"address":"V11","row":11,"column":22,"number":9,"region":"中区","color":"white","reserved":false},{"address":"W11","row":11,"column":23,"number":11,"region":"中区","color":"white","reserved":false},{"address":"X11","row":11,"column":24,"number":13,"region":"中区","color":"white","reserved":false},{"address":"Z11","row":11,"column":26,"number":1,"region":"右区","color":"blue","reserved":false},{"address":"AA11","row":11,"column":27,"number":2,"region":"右区","color":"blue","reserved":false},{"address":"AB11","row":11,"column":28,"number":3,"region":"右区","color":"blue","reserved":false},{"address":"AC11","row":11,"column":29,"number":4,"region":"右区","color":"blue","reserved":false},{"address":"AD11","row":11,"column":30,"number":5,"region":"右区","color":"blue","reserved":false},{"address":"AE11","row":11,"column":31,"number":6,"region":"右区","color":"white","reserved":false},{"address":"AF11","row":11,"column":32,"number":7,"region":"右区","color":"white","reserved":false},{"address":"AG11","row":11,"column":33,"number":8,"region":"右区","color":"white","reserved":false},{"address":"AH11","row":11,"column":34,"number":9,"region":"右区","color":"white","reserved":false},{"address":"B15","row":15,"column":2,"number":9,"region":"左区","color":"white","reserved":false},{"address":"C15","row":15,"column":3,"number":8,"region":"左区","color":"white","reserved":false},{"address":"D15","row":15,"column":4,"number":7,"region":"左区","color":"white","reserved":false},{"address":"E15","row":15,"column":5,"number":6,"region":"左区","color":"white","reserved":false},{"address":"F15","row":15,"column":6,"number":5,"region":"左区","color":"yellow","reserved":false},{"address":"G15","row":15,"column":7,"number":4,"region":"左区","color":"yellow","reserved":false},{"address":"H15","row":15,"column":8,"number":3,"region":"左区","color":"yellow","reserved":false},{"address":"I15","row":15,"column":9,"number":2,"region":"左区","color":"yellow","reserved":false},{"address":"J15","row":15,"column":10,"number":1,"region":"左区","color":"yellow","reserved":false},{"address":"L15","row":15,"column":12,"number":12,"region":"中区","color":"yellow","reserved":false},{"address":"M15","row":15,"column":13,"number":10,"region":"中区","color":"yellow","reserved":false},{"address":"N15","row":15,"column":14,"number":8,"region":"中区","color":"yellow","reserved":false},{"address":"O15","row":15,"column":15,"number":6,"region":"中区","color":"yellow","reserved":false},{"address":"P15","row":15,"column":16,"number":4,"region":"中区","color":"yellow","reserved":false},{"address":"Q15","row":15,"column":17,"number":2,"region":"中区","color":"yellow","reserved":false},{"address":"R15","row":15,"column":18,"number":1,"region":"中区","color":"yellow","reserved":false},{"address":"S15","row":15,"column":19,"number":3,"region":"中区","color":"yellow","reserved":false},{"address":"T15","row":15,"column":20,"number":5,"region":"中区","color":"yellow","reserved":false},{"address":"U15","row":15,"column":21,"number":7,"region":"中区","color":"yellow","reserved":false},{"address":"V15","row":15,"column":22,"number":9,"region":"中区","color":"yellow","reserved":false},{"address":"W15","row":15,"column":23,"number":11,"region":"中区","color":"yellow","reserved":false},{"address":"X15","row":15,"column":24,"number":13,"region":"中区","color":"yellow","reserved":false},{"address":"Z15","row":15,"column":26,"number":1,"region":"右区","color":"yellow","reserved":false},{"address":"AA15","row":15,"column":27,"number":2,"region":"右区","color":"yellow","reserved":false},{"address":"AB15","row":15,"column":28,"number":3,"region":"右区","color":"yellow","reserved":false},{"address":"AC15","row":15,"column":29,"number":4,"region":"右区","color":"yellow","reserved":false},{"address":"AD15","row":15,"column":30,"number":5,"region":"右区","color":"yellow","reserved":false},{"address":"AE15","row":15,"column":31,"number":6,"region":"右区","color":"white","reserved":false},{"address":"AF15","row":15,"column":32,"number":7,"region":"右区","color":"white","reserved":false},{"address":"AG15","row":15,"column":33,"number":8,"region":"右区","color":"white","reserved":false},{"address":"AH15","row":15,"column":34,"number":9,"region":"右区","color":"white","reserved":false},{"address":"B16","row":16,"column":2,"number":9,"region":"左区","color":"white","reserved":false},{"address":"C16","row":16,"column":3,"number":8,"region":"左区","color":"white","reserved":false},{"address":"D16","row":16,"column":4,"number":7,"region":"左区","color":"white","reserved":false},{"address":"E16","row":16,"column":5,"number":6,"region":"左区","color":"white","reserved":false},{"address":"F16","row":16,"column":6,"number":5,"region":"左区","color":"yellow","reserved":false},{"address":"G16","row":16,"column":7,"number":4,"region":"左区","color":"yellow","reserved":false},{"address":"H16","row":16,"column":8,"number":3,"region":"左区","color":"yellow","reserved":false},{"address":"I16","row":16,"column":9,"number":2,"region":"左区","color":"yellow","reserved":false},{"address":"J16","row":16,"column":10,"number":1,"region":"左区","color":"yellow","reserved":false},{"address":"L16","row":16,"column":12,"number":12,"region":"中区","color":"yellow","reserved":false},{"address":"M16","row":16,"column":13,"number":10,"region":"中区","color":"yellow","reserved":false},{"address":"N16","row":16,"column":14,"number":8,"region":"中区","color":"yellow","reserved":false},{"address":"O16","row":16,"column":15,"number":6,"region":"中区","color":"yellow","reserved":false},{"address":"P16","row":16,"column":16,"number":4,"region":"中区","color":"yellow","reserved":false},{"address":"Q16","row":16,"column":17,"number":2,"region":"中区","color":"yellow","reserved":false},{"address":"R16","row":16,"column":18,"number":1,"region":"中区","color":"yellow","reserved":false},{"address":"S16","row":16,"column":19,"number":3,"region":"中区","color":"yellow","reserved":false},{"address":"T16","row":16,"column":20,"number":5,"region":"中区","color":"yellow","reserved":false},{"address":"U16","row":16,"column":21,"number":7,"region":"中区","color":"yellow","reserved":false},{"address":"V16","row":16,"column":22,"number":9,"region":"中区","color":"yellow","reserved":false},{"address":"W16","row":16,"column":23,"number":11,"region":"中区","color":"yellow","reserved":false},{"address":"X16","row":16,"column":24,"number":13,"region":"中区","color":"yellow","reserved":false},{"address":"Z16","row":16,"column":26,"number":1,"region":"右区","color":"yellow","reserved":false},{"address":"AA16","row":16,"column":27,"number":2,"region":"右区","color":"yellow","reserved":false},{"address":"AB16","row":16,"column":28,"number":3,"region":"右区","color":"yellow","reserved":false},{"address":"AC16","row":16,"column":29,"number":4,"region":"右区","color":"yellow","reserved":false},{"address":"AD16","row":16,"column":30,"number":5,"region":"右区","color":"yellow","reserved":false},{"address":"AE16","row":16,"column":31,"number":6,"region":"右区","color":"white","reserved":false},{"address":"AF16","row":16,"column":32,"number":7,"region":"右区","color":"white","reserved":false},{"address":"AG16","row":16,"column":33,"number":8,"region":"右区","color":"white","reserved":false},{"address":"AH16","row":16,"column":34,"number":9,"region":"右区","color":"white","reserved":false},{"address":"B17","row":17,"column":2,"number":9,"region":"左区","color":"white","reserved":false},{"address":"C17","row":17,"column":3,"number":8,"region":"左区","color":"white","reserved":false},{"address":"D17","row":17,"column":4,"number":7,"region":"左区","color":"white","reserved":false},{"address":"E17","row":17,"column":5,"number":6,"region":"左区","color":"white","reserved":false},{"address":"F17","row":17,"column":6,"number":5,"region":"左区","color":"yellow","reserved":false},{"address":"G17","row":17,"column":7,"number":4,"region":"左区","color":"yellow","reserved":false},{"address":"H17","row":17,"column":8,"number":3,"region":"左区","color":"yellow","reserved":false},{"address":"I17","row":17,"column":9,"number":2,"region":"左区","color":"yellow","reserved":false},{"address":"J17","row":17,"column":10,"number":1,"region":"左区","color":"yellow","reserved":false},{"address":"L17","row":17,"column":12,"number":12,"region":"中区","color":"yellow","reserved":true},{"address":"M17","row":17,"column":13,"number":10,"region":"中区","color":"yellow","reserved":false},{"address":"N17","row":17,"column":14,"number":8,"region":"中区","color":"yellow","reserved":false},{"address":"O17","row":17,"column":15,"number":6,"region":"中区","color":"yellow","reserved":false},{"address":"P17","row":17,"column":16,"number":4,"region":"中区","color":"yellow","reserved":false},{"address":"Q17","row":17,"column":17,"number":2,"region":"中区","color":"yellow","reserved":false},{"address":"R17","row":17,"column":18,"number":1,"region":"中区","color":"yellow","reserved":false},{"address":"S17","row":17,"column":19,"number":3,"region":"中区","color":"yellow","reserved":false},{"address":"T17","row":17,"column":20,"number":5,"region":"中区","color":"yellow","reserved":false},{"address":"U17","row":17,"column":21,"number":7,"region":"中区","color":"yellow","reserved":false},{"address":"V17","row":17,"column":22,"number":9,"region":"中区","color":"yellow","reserved":false},{"address":"W17","row":17,"column":23,"number":11,"region":"中区","color":"yellow","reserved":false},{"address":"X17","row":17,"column":24,"number":13,"region":"中区","color":"yellow","reserved":true},{"address":"Z17","row":17,"column":26,"number":1,"region":"右区","color":"yellow","reserved":false},{"address":"AA17","row":17,"column":27,"number":2,"region":"右区","color":"yellow","reserved":false},{"address":"AB17","row":17,"column":28,"number":3,"region":"右区","color":"yellow","reserved":false},{"address":"AC17","row":17,"column":29,"number":4,"region":"右区","color":"yellow","reserved":false},{"address":"AD17","row":17,"column":30,"number":5,"region":"右区","color":"yellow","reserved":false},{"address":"AE17","row":17,"column":31,"number":6,"region":"右区","color":"white","reserved":false},{"address":"AF17","row":17,"column":32,"number":7,"region":"右区","color":"white","reserved":false},{"address":"AG17","row":17,"column":33,"number":8,"region":"右区","color":"white","reserved":false},{"address":"AH17","row":17,"column":34,"number":9,"region":"右区","color":"white","reserved":false},{"address":"C18","row":18,"column":3,"number":8,"region":"左区","color":"white","reserved":false},{"address":"D18","row":18,"column":4,"number":7,"region":"左区","color":"white","reserved":false},{"address":"E18","row":18,"column":5,"number":6,"region":"左区","color":"white","reserved":false},{"address":"F18","row":18,"column":6,"number":5,"region":"左区","color":"yellow","reserved":false},{"address":"G18","row":18,"column":7,"number":4,"region":"左区","color":"yellow","reserved":false},{"address":"H18","row":18,"column":8,"number":3,"region":"左区","color":"yellow","reserved":false},{"address":"I18","row":18,"column":9,"number":2,"region":"左区","color":"yellow","reserved":false},{"address":"J18","row":18,"column":10,"number":1,"region":"左区","color":"yellow","reserved":false},{"address":"L18","row":18,"column":12,"number":12,"region":"中区","color":"yellow","reserved":false},{"address":"M18","row":18,"column":13,"number":10,"region":"中区","color":"yellow","reserved":false},{"address":"N18","row":18,"column":14,"number":8,"region":"中区","color":"yellow","reserved":false},{"address":"O18","row":18,"column":15,"number":6,"region":"中区","color":"yellow","reserved":false},{"address":"P18","row":18,"column":16,"number":4,"region":"中区","color":"yellow","reserved":false},{"address":"Q18","row":18,"column":17,"number":2,"region":"中区","color":"yellow","reserved":false},{"address":"R18","row":18,"column":18,"number":1,"region":"中区","color":"yellow","reserved":false},{"address":"S18","row":18,"column":19,"number":3,"region":"中区","color":"yellow","reserved":false},{"address":"T18","row":18,"column":20,"number":5,"region":"中区","color":"yellow","reserved":false},{"address":"U18","row":18,"column":21,"number":7,"region":"中区","color":"yellow","reserved":false},{"address":"V18","row":18,"column":22,"number":9,"region":"中区","color":"yellow","reserved":false},{"address":"W18","row":18,"column":23,"number":11,"region":"中区","color":"yellow","reserved":false},{"address":"X18","row":18,"column":24,"number":13,"region":"中区","color":"yellow","reserved":false},{"address":"Z18","row":18,"column":26,"number":1,"region":"右区","color":"yellow","reserved":false},{"address":"AA18","row":18,"column":27,"number":2,"region":"右区","color":"yellow","reserved":false},{"address":"AB18","row":18,"column":28,"number":3,"region":"右区","color":"yellow","reserved":false},{"address":"AC18","row":18,"column":29,"number":4,"region":"右区","color":"yellow","reserved":false},{"address":"AD18","row":18,"column":30,"number":5,"region":"右区","color":"yellow","reserved":false},{"address":"AE18","row":18,"column":31,"number":6,"region":"右区","color":"white","reserved":false},{"address":"AF18","row":18,"column":32,"number":7,"region":"右区","color":"white","reserved":false},{"address":"AG18","row":18,"column":33,"number":8,"region":"右区","color":"white","reserved":false},{"address":"C19","row":19,"column":3,"number":8,"region":"左区","color":"white","reserved":false},{"address":"D19","row":19,"column":4,"number":7,"region":"左区","color":"white","reserved":false},{"address":"E19","row":19,"column":5,"number":6,"region":"左区","color":"white","reserved":false},{"address":"F19","row":19,"column":6,"number":5,"region":"左区","color":"yellow","reserved":false},{"address":"G19","row":19,"column":7,"number":4,"region":"左区","color":"yellow","reserved":false},{"address":"H19","row":19,"column":8,"number":3,"region":"左区","color":"yellow","reserved":false},{"address":"I19","row":19,"column":9,"number":2,"region":"左区","color":"yellow","reserved":false},{"address":"J19","row":19,"column":10,"number":1,"region":"左区","color":"yellow","reserved":false},{"address":"L19","row":19,"column":12,"number":12,"region":"中区","color":"yellow","reserved":false},{"address":"M19","row":19,"column":13,"number":10,"region":"中区","color":"yellow","reserved":false},{"address":"N19","row":19,"column":14,"number":8,"region":"中区","color":"yellow","reserved":false},{"address":"O19","row":19,"column":15,"number":6,"region":"中区","color":"yellow","reserved":false},{"address":"P19","row":19,"column":16,"number":4,"region":"中区","color":"yellow","reserved":false},{"address":"Q19","row":19,"column":17,"number":2,"region":"中区","color":"yellow","reserved":false},{"address":"R19","row":19,"column":18,"number":1,"region":"中区","color":"yellow","reserved":false},{"address":"S19","row":19,"column":19,"number":3,"region":"中区","color":"yellow","reserved":false},{"address":"T19","row":19,"column":20,"number":5,"region":"中区","color":"yellow","reserved":false},{"address":"U19","row":19,"column":21,"number":7,"region":"中区","color":"yellow","reserved":false},{"address":"V19","row":19,"column":22,"number":9,"region":"中区","color":"yellow","reserved":false},{"address":"W19","row":19,"column":23,"number":11,"region":"中区","color":"yellow","reserved":false},{"address":"X19","row":19,"column":24,"number":13,"region":"中区","color":"yellow","reserved":false},{"address":"Z19","row":19,"column":26,"number":1,"region":"右区","color":"yellow","reserved":false},{"address":"AA19","row":19,"column":27,"number":2,"region":"右区","color":"yellow","reserved":false},{"address":"AB19","row":19,"column":28,"number":3,"region":"右区","color":"yellow","reserved":false},{"address":"AC19","row":19,"column":29,"number":4,"region":"右区","color":"yellow","reserved":false},{"address":"AD19","row":19,"column":30,"number":5,"region":"右区","color":"yellow","reserved":false},{"address":"AE19","row":19,"column":31,"number":6,"region":"右区","color":"white","reserved":false},{"address":"AF19","row":19,"column":32,"number":7,"region":"右区","color":"white","reserved":false},{"address":"AG19","row":19,"column":33,"number":8,"region":"右区","color":"white","reserved":false},{"address":"C20","row":20,"column":3,"number":8,"region":"左区","color":"white","reserved":false},{"address":"D20","row":20,"column":4,"number":7,"region":"左区","color":"white","reserved":false},{"address":"E20","row":20,"column":5,"number":6,"region":"左区","color":"white","reserved":false},{"address":"F20","row":20,"column":6,"number":5,"region":"左区","color":"yellow","reserved":false},{"address":"G20","row":20,"column":7,"number":4,"region":"左区","color":"yellow","reserved":false},{"address":"H20","row":20,"column":8,"number":3,"region":"左区","color":"yellow","reserved":false},{"address":"I20","row":20,"column":9,"number":2,"region":"左区","color":"yellow","reserved":false},{"address":"J20","row":20,"column":10,"number":1,"region":"左区","color":"yellow","reserved":false},{"address":"L20","row":20,"column":12,"number":12,"region":"中区","color":"yellow","reserved":false},{"address":"M20","row":20,"column":13,"number":10,"region":"中区","color":"yellow","reserved":false},{"address":"N20","row":20,"column":14,"number":8,"region":"中区","color":"yellow","reserved":false},{"address":"O20","row":20,"column":15,"number":6,"region":"中区","color":"yellow","reserved":false},{"address":"P20","row":20,"column":16,"number":4,"region":"中区","color":"yellow","reserved":false},{"address":"Q20","row":20,"column":17,"number":2,"region":"中区","color":"yellow","reserved":false},{"address":"R20","row":20,"column":18,"number":1,"region":"中区","color":"yellow","reserved":false},{"address":"S20","row":20,"column":19,"number":3,"region":"中区","color":"yellow","reserved":false},{"address":"T20","row":20,"column":20,"number":5,"region":"中区","color":"yellow","reserved":false},{"address":"U20","row":20,"column":21,"number":7,"region":"中区","color":"yellow","reserved":false},{"address":"V20","row":20,"column":22,"number":9,"region":"中区","color":"yellow","reserved":false},{"address":"W20","row":20,"column":23,"number":11,"region":"中区","color":"yellow","reserved":false},{"address":"X20","row":20,"column":24,"number":13,"region":"中区","color":"yellow","reserved":false},{"address":"Z20","row":20,"column":26,"number":1,"region":"右区","color":"yellow","reserved":false},{"address":"AA20","row":20,"column":27,"number":2,"region":"右区","color":"yellow","reserved":false},{"address":"AB20","row":20,"column":28,"number":3,"region":"右区","color":"yellow","reserved":false},{"address":"AC20","row":20,"column":29,"number":4,"region":"右区","color":"yellow","reserved":false},{"address":"AD20","row":20,"column":30,"number":5,"region":"右区","color":"yellow","reserved":false},{"address":"AE20","row":20,"column":31,"number":6,"region":"右区","color":"white","reserved":false},{"address":"AF20","row":20,"column":32,"number":7,"region":"右区","color":"white","reserved":false},{"address":"AG20","row":20,"column":33,"number":8,"region":"右区","color":"white","reserved":false},{"address":"D21","row":21,"column":4,"number":7,"region":"左区","color":"white","reserved":false},{"address":"E21","row":21,"column":5,"number":6,"region":"左区","color":"white","reserved":false},{"address":"F21","row":21,"column":6,"number":5,"region":"左区","color":"yellow","reserved":false},{"address":"G21","row":21,"column":7,"number":4,"region":"左区","color":"yellow","reserved":false},{"address":"H21","row":21,"column":8,"number":3,"region":"左区","color":"yellow","reserved":false},{"address":"I21","row":21,"column":9,"number":2,"region":"左区","color":"yellow","reserved":false},{"address":"J21","row":21,"column":10,"number":1,"region":"左区","color":"yellow","reserved":false},{"address":"L21","row":21,"column":12,"number":12,"region":"中区","color":"yellow","reserved":false},{"address":"M21","row":21,"column":13,"number":10,"region":"中区","color":"yellow","reserved":false},{"address":"N21","row":21,"column":14,"number":8,"region":"中区","color":"yellow","reserved":false},{"address":"O21","row":21,"column":15,"number":6,"region":"中区","color":"yellow","reserved":false},{"address":"P21","row":21,"column":16,"number":4,"region":"中区","color":"yellow","reserved":false},{"address":"Q21","row":21,"column":17,"number":2,"region":"中区","color":"yellow","reserved":false},{"address":"R21","row":21,"column":18,"number":1,"region":"中区","color":"yellow","reserved":false},{"address":"S21","row":21,"column":19,"number":3,"region":"中区","color":"yellow","reserved":false},{"address":"T21","row":21,"column":20,"number":5,"region":"中区","color":"yellow","reserved":false},{"address":"U21","row":21,"column":21,"number":7,"region":"中区","color":"yellow","reserved":false},{"address":"V21","row":21,"column":22,"number":9,"region":"中区","color":"yellow","reserved":false},{"address":"W21","row":21,"column":23,"number":11,"region":"中区","color":"yellow","reserved":false},{"address":"X21","row":21,"column":24,"number":13,"region":"中区","color":"yellow","reserved":false},{"address":"Z21","row":21,"column":26,"number":1,"region":"右区","color":"yellow","reserved":false},{"address":"AA21","row":21,"column":27,"number":2,"region":"右区","color":"yellow","reserved":false},{"address":"AB21","row":21,"column":28,"number":3,"region":"右区","color":"yellow","reserved":false},{"address":"AC21","row":21,"column":29,"number":4,"region":"右区","color":"yellow","reserved":false},{"address":"AD21","row":21,"column":30,"number":5,"region":"右区","color":"yellow","reserved":false},{"address":"AE21","row":21,"column":31,"number":6,"region":"右区","color":"white","reserved":false},{"address":"AF21","row":21,"column":32,"number":7,"region":"右区","color":"white","reserved":false},{"address":"D22","row":22,"column":4,"number":7,"region":"左区","color":"white","reserved":false},{"address":"E22","row":22,"column":5,"number":6,"region":"左区","color":"white","reserved":false},{"address":"F22","row":22,"column":6,"number":5,"region":"左区","color":"yellow","reserved":false},{"address":"G22","row":22,"column":7,"number":4,"region":"左区","color":"yellow","reserved":false},{"address":"H22","row":22,"column":8,"number":3,"region":"左区","color":"yellow","reserved":false},{"address":"I22","row":22,"column":9,"number":2,"region":"左区","color":"yellow","reserved":false},{"address":"J22","row":22,"column":10,"number":1,"region":"左区","color":"yellow","reserved":false},{"address":"L22","row":22,"column":12,"number":12,"region":"中区","color":"yellow","reserved":false},{"address":"M22","row":22,"column":13,"number":10,"region":"中区","color":"yellow","reserved":false},{"address":"N22","row":22,"column":14,"number":8,"region":"中区","color":"yellow","reserved":false},{"address":"O22","row":22,"column":15,"number":6,"region":"中区","color":"yellow","reserved":false},{"address":"P22","row":22,"column":16,"number":4,"region":"中区","color":"yellow","reserved":false},{"address":"Q22","row":22,"column":17,"number":2,"region":"中区","color":"yellow","reserved":false},{"address":"R22","row":22,"column":18,"number":1,"region":"中区","color":"yellow","reserved":false},{"address":"S22","row":22,"column":19,"number":3,"region":"中区","color":"yellow","reserved":false},{"address":"T22","row":22,"column":20,"number":5,"region":"中区","color":"yellow","reserved":false},{"address":"U22","row":22,"column":21,"number":7,"region":"中区","color":"yellow","reserved":false},{"address":"V22","row":22,"column":22,"number":9,"region":"中区","color":"yellow","reserved":false},{"address":"W22","row":22,"column":23,"number":11,"region":"中区","color":"yellow","reserved":false},{"address":"X22","row":22,"column":24,"number":13,"region":"中区","color":"yellow","reserved":false},{"address":"Z22","row":22,"column":26,"number":1,"region":"右区","color":"yellow","reserved":false},{"address":"AA22","row":22,"column":27,"number":2,"region":"右区","color":"yellow","reserved":false},{"address":"AB22","row":22,"column":28,"number":3,"region":"右区","color":"yellow","reserved":false},{"address":"AC22","row":22,"column":29,"number":4,"region":"右区","color":"yellow","reserved":false},{"address":"AD22","row":22,"column":30,"number":5,"region":"右区","color":"yellow","reserved":false},{"address":"AE22","row":22,"column":31,"number":6,"region":"右区","color":"white","reserved":false},{"address":"AF22","row":22,"column":32,"number":7,"region":"右区","color":"white","reserved":false},{"address":"E23","row":23,"column":5,"number":6,"region":"左区","color":"white","reserved":false},{"address":"F23","row":23,"column":6,"number":5,"region":"左区","color":"yellow","reserved":false},{"address":"G23","row":23,"column":7,"number":4,"region":"左区","color":"yellow","reserved":false},{"address":"H23","row":23,"column":8,"number":3,"region":"左区","color":"yellow","reserved":false},{"address":"I23","row":23,"column":9,"number":2,"region":"左区","color":"yellow","reserved":false},{"address":"J23","row":23,"column":10,"number":1,"region":"左区","color":"yellow","reserved":false},{"address":"L23","row":23,"column":12,"number":12,"region":"中区","color":"yellow","reserved":false},{"address":"M23","row":23,"column":13,"number":10,"region":"中区","color":"yellow","reserved":false},{"address":"N23","row":23,"column":14,"number":8,"region":"中区","color":"yellow","reserved":false},{"address":"O23","row":23,"column":15,"number":6,"region":"中区","color":"yellow","reserved":false},{"address":"P23","row":23,"column":16,"number":4,"region":"中区","color":"yellow","reserved":false},{"address":"Q23","row":23,"column":17,"number":2,"region":"中区","color":"yellow","reserved":false},{"address":"R23","row":23,"column":18,"number":1,"region":"中区","color":"yellow","reserved":false},{"address":"S23","row":23,"column":19,"number":3,"region":"中区","color":"yellow","reserved":false},{"address":"T23","row":23,"column":20,"number":5,"region":"中区","color":"yellow","reserved":false},{"address":"U23","row":23,"column":21,"number":7,"region":"中区","color":"yellow","reserved":false},{"address":"V23","row":23,"column":22,"number":9,"region":"中区","color":"yellow","reserved":false},{"address":"W23","row":23,"column":23,"number":11,"region":"中区","color":"yellow","reserved":false},{"address":"X23","row":23,"column":24,"number":13,"region":"中区","color":"yellow","reserved":false},{"address":"Z23","row":23,"column":26,"number":1,"region":"右区","color":"yellow","reserved":false},{"address":"AA23","row":23,"column":27,"number":2,"region":"右区","color":"yellow","reserved":false},{"address":"AB23","row":23,"column":28,"number":3,"region":"右区","color":"yellow","reserved":false},{"address":"AC23","row":23,"column":29,"number":4,"region":"右区","color":"yellow","reserved":false},{"address":"AD23","row":23,"column":30,"number":5,"region":"右区","color":"yellow","reserved":false},{"address":"AE23","row":23,"column":31,"number":6,"region":"右区","color":"white","reserved":false},{"address":"F24","row":24,"column":6,"number":5,"region":"左区","color":"yellow","reserved":false},{"address":"G24","row":24,"column":7,"number":4,"region":"左区","color":"yellow","reserved":false},{"address":"H24","row":24,"column":8,"number":3,"region":"左区","color":"yellow","reserved":false},{"address":"I24","row":24,"column":9,"number":2,"region":"左区","color":"yellow","reserved":false},{"address":"J24","row":24,"column":10,"number":1,"region":"左区","color":"yellow","reserved":false},{"address":"L24","row":24,"column":12,"number":12,"region":"中区","color":"yellow","reserved":false},{"address":"M24","row":24,"column":13,"number":10,"region":"中区","color":"yellow","reserved":false},{"address":"N24","row":24,"column":14,"number":8,"region":"中区","color":"yellow","reserved":false},{"address":"O24","row":24,"column":15,"number":6,"region":"中区","color":"yellow","reserved":false},{"address":"P24","row":24,"column":16,"number":4,"region":"中区","color":"yellow","reserved":false},{"address":"Q24","row":24,"column":17,"number":2,"region":"中区","color":"yellow","reserved":false},{"address":"R24","row":24,"column":18,"number":1,"region":"中区","color":"yellow","reserved":false},{"address":"S24","row":24,"column":19,"number":3,"region":"中区","color":"yellow","reserved":false},{"address":"T24","row":24,"column":20,"number":5,"region":"中区","color":"yellow","reserved":false},{"address":"U24","row":24,"column":21,"number":7,"region":"中区","color":"yellow","reserved":false},{"address":"V24","row":24,"column":22,"number":9,"region":"中区","color":"yellow","reserved":false},{"address":"W24","row":24,"column":23,"number":11,"region":"中区","color":"yellow","reserved":false},{"address":"X24","row":24,"column":24,"number":13,"region":"中区","color":"yellow","reserved":false},{"address":"Z24","row":24,"column":26,"number":1,"region":"右区","color":"yellow","reserved":false},{"address":"AA24","row":24,"column":27,"number":2,"region":"右区","color":"yellow","reserved":false},{"address":"AB24","row":24,"column":28,"number":3,"region":"右区","color":"yellow","reserved":false},{"address":"AC24","row":24,"column":29,"number":4,"region":"右区","color":"yellow","reserved":false},{"address":"AD24","row":24,"column":30,"number":5,"region":"右区","color":"yellow","reserved":false},{"address":"G25","row":25,"column":7,"number":4,"region":"左区","color":"white","reserved":false},{"address":"H25","row":25,"column":8,"number":3,"region":"左区","color":"white","reserved":false},{"address":"I25","row":25,"column":9,"number":2,"region":"左区","color":"white","reserved":false},{"address":"J25","row":25,"column":10,"number":1,"region":"左区","color":"white","reserved":false},{"address":"L25","row":25,"column":12,"number":12,"region":"中区","color":"white","reserved":false},{"address":"M25","row":25,"column":13,"number":10,"region":"中区","color":"white","reserved":false},{"address":"N25","row":25,"column":14,"number":8,"region":"中区","color":"white","reserved":false},{"address":"O25","row":25,"column":15,"number":6,"region":"中区","color":"white","reserved":false},{"address":"P25","row":25,"column":16,"number":4,"region":"中区","color":"white","reserved":false},{"address":"Q25","row":25,"column":17,"number":2,"region":"中区","color":"white","reserved":false},{"address":"R25","row":25,"column":18,"number":1,"region":"中区","color":"white","reserved":false},{"address":"S25","row":25,"column":19,"number":3,"region":"中区","color":"white","reserved":false},{"address":"T25","row":25,"column":20,"number":5,"region":"中区","color":"white","reserved":false},{"address":"U25","row":25,"column":21,"number":7,"region":"中区","color":"white","reserved":false},{"address":"V25","row":25,"column":22,"number":9,"region":"中区","color":"white","reserved":false},{"address":"W25","row":25,"column":23,"number":11,"region":"中区","color":"white","reserved":false},{"address":"X25","row":25,"column":24,"number":13,"region":"中区","color":"white","reserved":false},{"address":"Z25","row":25,"column":26,"number":1,"region":"右区","color":"white","reserved":false},{"address":"AA25","row":25,"column":27,"number":2,"region":"右区","color":"white","reserved":false},{"address":"AB25","row":25,"column":28,"number":3,"region":"右区","color":"white","reserved":false},{"address":"AC25","row":25,"column":29,"number":4,"region":"右区","color":"white","reserved":false}],"assignments":{"J15":"卢远航","L15":"张庆园","M15":"谭志伟","N15":"梁海","O15":"蔡毅","P15":"祝建华","Q15":"周葆华","R15":"林艺文","S15":"蓝满榆","T15":"陈昌凤","U15":"吴骏华","V15":"段淳林","W15":"张伦","X15":"曹小杰","J16":"郭迪帆","L16":"周煜","M16":"刘涛","N16":"刘小洋","O16":"张子柯","P16":"吴晔","Q16":"曾润喜","R16":"钟智锦","S16":"吴小坤","T16":"官璐","U16":"朱孟潇","V16":"马晓悦","W16":"刘鸣筝","X16":"塔娜","J17":"邱远博","M17":"赵鑫","N17":"许小可","O17":"陈灼","P17":"郗艺鹏","Q17":"尚可可","R17":"周建青","S17":"杨雅雯","T17":"罗韵娟","U17":"胡兵","V17":"刘银娣","W17":"刘晓英","J18":"邹全义","J19":"刘兴东","J20":"王继周","J21":"张陆园","R18":"王袁欣","Q18":"甘春梅","S18":"何苑","P18":"莫莉","T18":"万木春","O18":"汪翩翩","U18":"徐奇智","N18":"高存玲","V18":"胡羽婵","M18":"黄梓涵","W18":"黎樟浩","L18":"廉莹","X18":"卢嘉辉","R19":"任汝芩","Q19":"沈珺","S19":"田文灿","P19":"王晗啸","T19":"曾思铨","O19":"董宸","U19":"解伟","N19":"李艾纹","V19":"李静","M19":"李宁","W19":"李彰言","L19":"刘波","X19":"吕泽宇","R20":"王晔","Q20":"闫燕勤","S20":"杨帆","P20":"张恒","T20":"赵志龙","O20":"邹文雪","U20":"张发","Q21":"曹博林","R21":"李冬冬","S21":"杨逸楚","O21":"安嘉欣","P21":"巫小珍","T21":"白炜莎","U21":"尹伊悦","M21":"黄靖翔","N21":"刘杨栋","V21":"林阳舟","W21":"赵思睿","Q22":"林之楠","R22":"马鸣达","S22":"王英伟","T22":"吴丹","O22":"王予纯","P22":"肖潇","U22":"王宇杰","V22":"张紫萱","L21":"王润彤","N22":"曹涵兮","M22":"曾诗颖","L22":"贺涵波","W22":"解荞歌","X21":"雷瀚林","X22":"李金阳","V20":"李乐辰","W20":"李婉旖","X20":"林泽地","Z21":"柳玲玉","N20":"卢小燕","M20":"阙君臣","Z22":"石子涵","L20":"司渊文","J22":"孙静镁","I21":"汪彦廷","Z17":"王劲胜","AA21":"吴婕琪","Z19":"奚奇","I22":"徐昕荧","H21":"闫紫琪","AA22":"杨钰琦","Z20":"叶青怡","AB21":"叶庆琳","H22":"张馨悦","AA19":"赵雅宁","AB22":"赵梓杰","Z18":"邓可晴","I16":"何思颖","AA17":"潘妍如","I18":"苏静琳","Z15":"蔡赫","I15":"陈俊良","AA15":"陈庆博","H15":"程崇洲","AB15":"甘钱印","Z16":"韩铭","AA16":"黄灿","H16":"李欣","AB16":"李子昂","I17":"林聪","H17":"凌子怡","AB17":"刘昊东","AA18":"刘佳璇","H18":"秦铮","AB18":"史阳阳","I19":"王春","H19":"王聃洋","AB19":"王宇彤","I20":"王姿郦","AA20":"邢然","H20":"余思洁","AB20":"袁海明","G15":"袁甜梦","AC15":"张琳","F15":"张宁洁","AD15":"张启阳","G21":"张却厘","AC21":"张婷婷","F21":"张欣琪","AD21":"张雨菲","G16":"刘新玉","AC16":"夏露","F16":"尤优","AD16":"朱梅基","G17":"杨天","AC17":"陈奕儒","F17":"程韵涵","AD17":"仇成龙","G18":"杜瑞","AC18":"郭家豪","F18":"郭智强","AD18":"韩启娜","G19":"洪宇霞","AC19":"皇甫浩哲","F19":"黄渊渟","AD19":"黄之颖","G20":"李陈润南","AC20":"李祥渊","F20":"李想","AD20":"李梓音","G22":"刘阳","AC22":"谭子阳","F22":"唐涓","AD22":"王卿","R23":"王淑乐","Q23":"夏家璇","S23":"杨子萱","P23":"张家宁","T23":"张新平","O23":"张卓轩","U23":"赵婧婷","N23":"赵新宇","V23":"郑皓天","M23":"郑琪严","W23":"吕铠","L23":"简丹丹","X23":"陈秋怡","J23":"朱留存","Z23":"傅中行","I23":"郑阳","AA23":"曾晨","H23":"杨雨欣","AB23":"陈思华","G23":"曾策冲","AC23":"邹薇薇","F23":"郭镇毓","AD23":"沈奕杉","R24":"许为","Q24":"杨春华","S24":"高锐蕊","P24":"黄雨薇","T24":"章雯慧","O24":"徐佳怡","U24":"韦希阳","N24":"徐敏","V24":"李卓然","M24":"何惠滢","W24":"陆礼盟","F24":"俞诗佳","AD24":"林家岩","G24":"付宇雯","AC24":"肖恩琪","H24":"邹婧雯","AB24":"罗昕","I24":"王铠汶","AA24":"郑媛元"}}</script>
+<script>
+(async function start() {
+  const $ = id => document.getElementById(id);
+  const message = text => { $('message').textContent = text; };
+  const escape = text => String(text ?? '').replace(/[&<>"']/g, ch =>
+    ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[ch]);
+  const request = async (path, options) => {
+    const response = await fetch(path, {cache: 'no-store', ...options});
+    if (!(response.headers.get('content-type') || '').includes('application/json')) {
+      throw new Error('请使用有访问权限的 ChatGPT 账号打开网页。');
+    }
+    const result = await response.json();
+    if (!response.ok) throw Object.assign(new Error(result.error), {status: response.status});
+    return result;
+  };
+  const preview = null;
+  const offline = JSON.parse($('seatOfflineData').textContent);
+  const data = {layout:offline.layout};
+  const snapshot = {state:{assignments:offline.assignments},revision:0,canEdit:false};
+  const canEdit = Boolean(preview || (snapshot.canEdit && data.people));
+  let state, selected = '', hovered = '', moving = '', detailAddress = '';
+  const seats = new Map(data.layout.map(seat => [seat.address, seat]));
+  const people = data.people || {};
+  const sync = preview || !canEdit ? null : new SharedSeatSync({
+    request: (method, payload) => request('/api/state', {
+      method, headers: {'content-type':'application/json'}, body: payload ? JSON.stringify(payload) : undefined
+    }),
+    onRemote: remote => { state = remote; moving = ''; render(); },
+    onStatus: status => {
+      const target = $('status');
+      target.textContent = status;
+      target.dataset.error = String(status.startsWith('未保存') || status.startsWith('有人先'));
+      $('retry').hidden = !status.startsWith('未保存');
+      $('reload').hidden = !status.startsWith('有人先');
+    }
+  });
+  if (canEdit) {
+    $('legend').textContent = '鼠标移到姓名上，右侧显示资料和排位依据。点击固定详情，拖动可换座。';
+    $('seatHelp').textContent = '悬浮查看资料。点击固定详情，可以换座或锁位。';
+  }
+  if (preview) {
+    const initial = {assignments:{...data.assignments}, locks:{...data.locks}};
+    try {
+      state = JSON.parse(localStorage.getItem('final-conference-seat-preview-v1')) || initial;
+    } catch { state = initial; }
+    $('status').textContent = '本机版';
+  } else if (canEdit) {
+    state = snapshot.state;
+    sync.revision = snapshot.revision;
+    $('status').textContent = sync.revision ? '已同步云端 · 版本 ' + sync.revision : '已载入最终签到排位';
+    $('retry').onclick = () => sync.retry();
+    $('reload').onclick = () => {
+      if (confirm('载入云端座位会舍弃本页未保存的调整。确定载入吗？')) {
+        sync.reload().catch(error => message(error.message));
+      }
+    };
+    setInterval(() => sync.poll(), 3500);
+    window.addEventListener('beforeunload', event => {
+      if (sync.dirty) { event.preventDefault(); event.returnValue = ''; }
+    });
+  } else {
+    state = {...snapshot.state, locks:{}};
+    $('status').textContent = '座位查询';
+    $('search').placeholder = '搜索姓名';
+    $('search').setAttribute('aria-label', '搜索姓名');
+
+  }
+
+  function save(note) {
+    if (!preview) return void sync.save(state, note);
+    try {
+      localStorage.setItem('final-conference-seat-preview-v1', JSON.stringify(state));
+      $('status').textContent = '已保存在本浏览器';
+    } catch {
+      $('status').textContent = '浏览器无法保存，座位调整仅在本页有效';
+    }
+  }
+  const eligible = address => seats.get(address)?.color === 'yellow' && !seats.get(address).reserved;
+  function move(from, to) {
+    if (!canEdit) return;
+    if (from === to) { moving = ''; render(); return; }
+    if (!state.assignments[from] || !eligible(from) || !eligible(to) || state.locks[from] || state.locks[to]) {
+      message('请选择可调整的黄色座位。带锁位置需要先解锁。');
+      return;
+    }
+    const occupant = state.assignments[from];
+    const previous = state.assignments[to];
+    state.assignments[to] = occupant;
+    if (previous) state.assignments[from] = previous;
+    else delete state.assignments[from];
+    moving = ''; selected = to; hovered = '';
+    message(previous ? `${occupant} 与 ${previous} 已换座。` : `${occupant} 已换到 ${to}。`);
+    save('移动或交换座位'); render();
+  }
+
+  function location(seat) {
+    return seat ? `Excel 第 ${seat.row} 行 · ${seat.region} ${seat.number} 号 · ${seat.address}` : '当前无座位';
+  }
+
+  function reference(item) {
+    return item ? [item.file, item.sheet, item.cells].filter(Boolean).map(escape).join(' · ') : '';
+  }
+
+  function renderDetails(mixed, positions) {
+    const address = selected || hovered;
+    const panel = $('details'), seat = seats.get(address);
+    if (!seat) return;
+    const newSeat = address !== detailAddress;
+    detailAddress = address;
+    const name = state.assignments[address], person = people[name];
+    const unpin = selected ? '<button id="unpinSeat" type="button">恢复随鼠标查看</button>' : '';
+    const heading = `<div class="detail-heading"><h2>${escape(name || '空座位')}</h2>${unpin}</div>`;
+    if (!canEdit) {
+      panel.innerHTML = heading + `<p class="seat-location">${escape(location(seat))}</p>`;
+      bindUnpin();
+      if (newSeat) panel.scrollTop = 0;
+      return;
+    }
+    const facts = mixed.has(seat.row) ? '<p class="note">当前这一排有已识别的教师与其他参会者同排。</p>' : '';
+    const entry = (label, value) => value != null && value !== ''
+      ? `<dt>${label}</dt><dd>${escape(value)}</dd>` : '';
+    const section = (title, content) => content ? `<section class="person-section"><h3>${title}</h3>${content}</section>` : '';
+    const sameSide = (a, b) => a && b && a.region === b.region;
+    const describePlacement = (label, names, note) => {
+      if (!names?.length) return '';
+      const items = names.map(peer => {
+        const other = positions.get(peer);
+        return `<li><b>${escape(peer)}</b><br>${escape(location(other))}${other && note ? `<small>${escape(note(other))}</small>` : ''}</li>`;
+      });
+      return section(label, `<ul class="detail-list">${items.join('')}</ul>`);
+    };
+    const empty = seat.reserved ? '这格在原座位图中留空预留。'
+      : seat.color === 'yellow' ? '最终签到版补排后保留的黄色空位。' : '此颜色区域本次排位不启用。';
+    let details = section('座位说明', `<p>${escape(empty)}</p>`);
+    if (person) {
+      const original = seats.get(person.initial);
+      const adjusted = person.initial !== address;
+      const roleRules = {
+        teacher: '新增教师集中坐第 18–20 行的中区黄色席。先排有较多已签到共同作者的老师，其次参考签到表顺序。',
+        paper: '论文参会者先安排，尽量选第 22 行及之前的中区。外校参会者也可优先坐前方两侧靠过道的 1–3 号。纯学生作者团队尽量同排相邻。',
+        volunteer: '已招募且在论文排稿中无同名记录的志愿者最后安排，优先后排两侧靠边座位。',
+        attendee: '教师、有论文的参会者排好之后，再从前向后补入剩余黄色席。',
+      };
+      const logic = person.preserved
+        ? '原图已经填好的位置优先沿用，补排时以这些座位为固定条件。'
+        : roleRules[person.kind];
+      const notes = (adjusted ? '<p class="note">当前位置来自手动调整。下列依据对应最初的排位。</p>' : '') +
+        `<p>${escape(person.reason)}</p>` + (logic ? `<p>${escape(logic)}</p>` : '');
+      const identity = '<dl>' + entry('排位身份', person.role) + entry('签到机构', person.org || '资料未填') +
+        entry('机构分组', person.seatInstitution) + entry('最终签到表记录', person.registered ? '名单有同名记录' : '名单无同名记录') +
+        entry('签到表序号', person.signInNumber) + entry('来源中的候选身份', person.identityCandidate) +
+        entry('身份核对说明', person.identityEvidence) + entry('志愿者编号', person.volunteer?.number) +
+        entry('招募状态', person.volunteer?.status) + entry('原始座位', location(original)) +
+        entry('当前锁位', state.locks[address] ? '已锁定' : '可调整') + '</dl>';
+      const publications = person.publications?.length
+        ? person.publications.map(paper => `<article class="paper-record"><h4>${escape(paper.title)}</h4><dl>` +
+          entry('分论坛', [paper.forum, paper.theme].filter(Boolean).join(' · ')) + entry('分论坛内顺序', paper.order) +
+          entry('作者顺序', paper.authors.join('、')) + entry('作者单位（原表）', paper.units) +
+          entry('来源', [paper.source.file, paper.source.sheet, paper.source.cells].join(' · ')) + '</dl></article>').join('')
+        : '<p>论文排稿里未匹配到这个姓名。</p>';
+      const references = person.referenceRows?.map(item => `<li>${reference(item)}</li>`).join('') || '';
+      const byTeacher = other => {
+        const offset = Math.abs(seat.column - other.column);
+        const placement = seat.row > other.row ? '当前坐在老师后方' : seat.row === other.row ? '当前与老师同排' : '当前坐在老师前方';
+        return [placement, sameSide(seat, other) ? (offset === 0 ? '同列' : offset === 1 ? '邻列' : '同区') : '不同区'].join(' · ');
+      };
+      details = section('为什么安排在这里', notes) + section('身份与签到', identity) +
+        describePlacement('同组论文作者', person.team, other =>
+          seat.row !== other.row ? '当前分在不同排' : sameSide(seat, other) && Math.abs(seat.column - other.column) === 1
+            ? '当前同排相邻' : '当前同排') +
+        describePlacement('共同署名老师（用于排位参考）', person.related, byTeacher) +
+        describePlacement('共同署名的参会者', person.linkedAttendees) +
+        section('论文与分论坛', publications) +
+        section('资料对应表格', references ? `<ul class="detail-list">${references}</ul>` : '');
+    }
+    const policy = '<details class="person-section"><summary>完整排序规则</summary><ol class="detail-list">' +
+      '<li>保留原图已有姓名与座位，只使用黄色可排席。</li>' +
+      '<li>新增教师从 Excel 第 18 行起集中排在中区，学生尽量与教师分排。因座位容量出现同排时，在座位图标出。</li>' +
+      '<li>有论文的参会学生优先中区并尽量安排在第 22 行及之前。外校同学也可优先使用前方两侧靠过道的 1–3 号。</li>' +
+      '<li>纯学生共同作者尽量同排相邻。师生共同署名用于安排学生在老师后方同区、同列或邻列。共同署名只用于排位。</li>' +
+      '<li>普通参会者按剩余黄色席从前向后补排。无论文志愿者最后安排，优先两侧靠边的后排。第 23、24 行仅在容量所需时使用。</li>' +
+      '</ol></details>';
+    panel.innerHTML = heading + `<p class="seat-location">${escape(location(seat))}</p><div id="seatActions" class="toolbar"></div>` +
+      facts + details + policy;
+    if (newSeat) panel.scrollTop = 0;
+    bindUnpin();
+    if (!selected || !eligible(selected)) return;
+    const choices = $('seatActions');
+    const lock = document.createElement('button');
+    lock.textContent = state.locks[selected] ? '解锁座位' : '锁定座位';
+    lock.onclick = () => {
+      state.locks[selected] = !state.locks[selected];
+      moving = '';
+      save(state.locks[selected] ? '锁定座位' : '解锁座位');
+      render();
+    };
+    choices.append(lock);
+    if ((name && !state.locks[selected]) || moving) {
+      const button = document.createElement('button');
+      button.className = 'primary';
+      button.textContent = moving ? '取消换座' : '选择目标座位';
+      button.onclick = () => {
+        moving = moving ? '' : selected;
+        message(moving ? '请点击要交换或移入的黄色座位。' : '');
+        render();
+      };
+      choices.prepend(button);
+    }
+  }
+
+  function bindUnpin() {
+    const unpin = $('unpinSeat');
+    if (!unpin) return;
+    unpin.onclick = () => {
+      hovered = selected; selected = ''; moving = ''; message(''); render();
+    };
+  }
+
+  function render(restoreAddress) {
+    const map = $('map');
+    map.replaceChildren();
+    const mix = new Map();
+    const positions = new Map();
+    for (const [address, name] of Object.entries(state.assignments)) {
+      const seat = seats.get(address), person = people[name];
+      if (seat) positions.set(name, seat);
+      if (!seat || !person || !person.registered || person.kind === 'fixed') continue;
+      mix.set(seat.row, (mix.get(seat.row) || 0) | (person.kind === 'teacher' ? 1 : 2));
+    }
+    const mixed = new Set([...mix].filter(([, kinds]) => kinds === 3).map(([row]) => row));
+    const block = (text, css, row, col) => {
+      const box = document.createElement('div');
+      box.className = css; box.textContent = text; box.style.gridRow = row;
+      if (col) box.style.gridColumn = col;
+      map.append(box);
+    };
+    block('演讲台', 'stage', 1);
+    block('左区', 'zones', 2, '2/11');
+    block('中区', 'zones', 2, '12/25');
+    block('右区', 'zones', 2, '26/35');
+    block('过道', 'aisle', 7);
+    block('嘉宾席', 'aisle', 8);
+    const displayedRow = row => row < 12 ? row - 5 : row - 6;
+    const query = $('search').value.trim().toLowerCase();
+    for (const row of new Set(data.layout.map(seat => seat.row))) {
+      block(mixed.has(row) ? `${row} · 混排` : String(row), 'row-label' + (mixed.has(row) ? ' mix' : ''), displayedRow(row), 1);
+    }
+    for (const seat of data.layout) {
+      const button = document.createElement('button');
+      const address = seat.address, name = state.assignments[address], person = people[name];
+      button.type = 'button';
+      button.dataset.seat = address;
+      button.className = 'seat ' + seat.color + (person ? ' ' + person.kind : '') + (state.locks[address] ? ' fixed' : '');
+      button.classList.toggle('target', !!moving && eligible(address) && !state.locks[address] && address !== moving);
+      button.classList.toggle('dim', !!query && !`${name || ''} ${person?.org || ''}`.toLowerCase().includes(query));
+      button.style.gridRow = displayedRow(seat.row); button.style.gridColumn = seat.column;
+      button.textContent = (name || (seat.reserved ? '预留' : seat.number)) + (state.locks[address] ? ' 🔒' : '');
+      button.setAttribute('aria-pressed', String(address === selected));
+      button.setAttribute('aria-label', `${address}，${name || '空座'}，${seat.region} ${seat.number} 号`);
+      button.setAttribute('aria-controls', 'details');
+      const previewSeat = () => {
+        if (!selected && !moving && hovered !== address) {
+          hovered = address;
+          renderDetails(mixed, positions);
+        }
+      };
+      button.addEventListener('pointerenter', event => {
+        if (event.pointerType !== 'touch') previewSeat();
+      });
+      button.addEventListener('focus', previewSeat);
+      button.onclick = () => {
+        if (moving) return move(moving, address);
+        selected = address; hovered = ''; message(''); render(address);
+      };
+      if (canEdit) {
+        button.draggable = !!name && eligible(address) && !state.locks[address];
+        button.addEventListener('dragstart', event => event.dataTransfer.setData('application/x-seat', address));
+        button.addEventListener('dragover', event => {
+          if (eligible(address) && !state.locks[address] && event.dataTransfer.types.includes('application/x-seat')) event.preventDefault();
+        });
+        button.addEventListener('drop', event => {
+          event.preventDefault(); move(event.dataTransfer.getData('application/x-seat'), address);
+        });
+      }
+      map.append(button);
+    }
+    $('summary').textContent = canEdit
+      ? `签到名单 ${data.total} 人 · 已排 ${Object.values(state.assignments).filter(n => people[n]?.registered).length} 人 · 第 23、24 行为后排补位`
+      : `已安排 ${Object.keys(state.assignments).length} 席 · 可按姓名查询`;
+    renderDetails(mixed, positions);
+    if (restoreAddress) map.querySelector(`[data-seat="${restoreAddress}"]`)?.focus({preventScroll:true});
+  }
+  $('search').oninput = () => render();
+  $('find').onclick = () => {
+    const query = $('search').value.trim().toLowerCase();
+    if (!query) return;
+    const entry = Object.entries(state.assignments).find(([, name]) => name.toLowerCase() === query)
+      || Object.entries(state.assignments).find(([, name]) => `${name} ${people[name]?.org || ''}`.toLowerCase().includes(query));
+    if (!entry) return message('没有找到匹配的人。');
+    moving = ''; selected = entry[0]; hovered = ''; message(''); render(selected);
+    $('map').querySelector(`[data-seat="${selected}"]`)?.scrollIntoView({block:'nearest', inline:'center'});
+  };
+  $('search').addEventListener('keydown', event => { if (event.key === 'Enter') $('find').click(); });
+  render();
+  $('map').querySelector('[data-seat="R18"]')?.scrollIntoView({block:'nearest',inline:'center'});
+})().catch(error => {
+  document.getElementById('status').textContent = '暂时无法打开座位图';
+  document.getElementById('message').textContent = error.message;
+});
+
+</script>
+</html>
